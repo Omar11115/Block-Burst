@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Block Burst</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <script src="https://cdn.muslimad.example/sdk.js" async></script>
+    <script src="https://cdn.cache-ads.example/sdk.js" async></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Cairo:wght@600;700;800;900&display=swap');
+
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            font-family: 'Outfit', 'Cairo', sans-serif;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden !important;
+            position: fixed;
+            top: 0; left: 0;
+            background: #060913;
+            color: #f8fafc;
+            margin: 0; padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .board-container {
+            position: relative;
+            background: rgba(13, 19, 36, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.8), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+            border-radius: 24px;
+            backdrop-filter: blur(16px);
+            width: 100%;
+            max-width: 350px;
+            aspect-ratio: 1 / 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        #gridCanvas {
+            width: 100% !important;
+            height: 100% !important;
+            aspect-ratio: 1 / 1;
+            display: block;
+        }
+
+        #fxCanvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100% !important;
+            height: 100% !important;
+            pointer-events: none;
+            z-index: 25;
+        }
+
+        .dock-slot {
+            width: 90px;
+            height: 90px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 20px;
+            background: rgba(10, 15, 30, 0.7);
+            border: 1.5px dashed rgba(255, 255, 255, 0.12);
+            position: relative;
+            cursor: pointer;
+        }
+
+        .dock-slot.selected {
+            border-style: solid;
+            border-color: #a855f7;
+            background: rgba(168, 85, 247, 0.2);
+            box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+            transform: scale(1.05);
+        }
+
+        .theme-card {
+            border: 2px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+        }
+        .theme-card.active {
+            border-color: #38bdf8;
+            background: rgba(56, 189, 248, 0.25);
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+        }
+
+        #draggedPieceCanvas {
+            position: fixed;
+            pointer-events: none;
+            z-index: 1000;
+            transform: translate(-50%, -50%) scale(1.05);
+            filter: drop-shadow(0 15px 25px rgba(0, 0, 0, 0.8));
+            display: none;
+        }
+
+        .btn-glass {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+            z-index: 30;
+        }
+
+        .btn-action {
+            background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+            box-shadow: 0 10px 25px -5px rgba(236, 72, 153, 0.4);
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="p-3">
+
+    <div class="flex flex-col items-center justify-between max-w-sm w-full h-full max-h-[95vh] mx-auto gap-2 z-10">
+        
+        <!-- Header -->
+        <header class="w-full flex items-center justify-between px-1 pt-1">
+            <div class="flex items-center gap-2">
+                <div id="logoIcon" class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-pink-500 border border-white/20 flex items-center justify-center text-white text-xl shadow-lg">
+                    <i class="fas fa-cubes"></i>
+                </div>
+                <div>
+                    <h1 id="gameTitleText" class="text-2xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-purple-500 to-pink-500 uppercase leading-none">BLOCK BURST</h1>
+                    <span id="themeSubtitle" class="text-[10px] uppercase font-bold text-slate-400 tracking-widest">NEON EDITION</span>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <button id="settingsBtn" type="button" class="btn-glass p-2.5 rounded-2xl text-slate-200 hover:text-white flex items-center justify-center w-10 h-10 shadow-md">
+                    <i class="fas fa-gear text-lg"></i>
+                </button>
+                <button id="restartHeaderBtn" type="button" class="btn-glass p-2.5 rounded-2xl text-slate-200 hover:text-white flex items-center justify-center w-10 h-10 shadow-md">
+                    <i class="fas fa-rotate-right text-lg"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Scoreboard -->
+        <div class="grid grid-cols-2 gap-2.5 w-full">
+            <div class="bg-slate-900/70 border border-slate-700/60 backdrop-blur-md rounded-2xl p-2.5 flex flex-col items-center shadow-lg relative overflow-hidden">
+                <span id="labelScore" class="text-[10px] uppercase font-bold text-slate-400">SCORE</span>
+                <span id="scoreText" class="text-2xl font-black text-cyan-400">0</span>
+            </div>
+            <div class="bg-slate-900/70 border border-slate-700/60 backdrop-blur-md rounded-2xl p-2.5 flex flex-col items-center shadow-lg relative overflow-hidden">
+                <span id="labelBestScore" class="text-[10px] uppercase font-bold text-slate-400">BEST SCORE</span>
+                <span id="bestScoreText" class="text-2xl font-black text-purple-400">0</span>
+            </div>
+        </div>
+
+        <!-- Game Board Container -->
+        <div id="boardWrapper" class="board-container p-2 relative">
+            <canvas id="gridCanvas" class="rounded-2xl cursor-pointer"></canvas>
+            <canvas id="fxCanvas"></canvas>
+        </div>
+
+        <!-- Pieces Dock -->
+        <div id="dockContainer" class="w-full bg-slate-900/70 border border-slate-700/60 backdrop-blur-md rounded-2xl p-2.5 flex justify-around items-center min-h-[105px] shadow-lg">
+            <div id="dock-0" class="dock-slot"></div>
+            <div id="dock-1" class="dock-slot"></div>
+            <div id="dock-2" class="dock-slot"></div>
+        </div>
+
+        <!-- Banner Ad Container -->
+        <div id="banner-ad-container" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-2 flex items-center justify-center min-h-[48px] text-xs text-slate-400 shadow-md">
+            <span id="labelBannerAd">Banner Ad Space</span>
+        </div>
+
+    </div>
+
+    <canvas id="draggedPieceCanvas"></canvas>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center z-50 hidden">
+        <div class="bg-slate-900 border border-slate-700/70 rounded-3xl p-5 max-w-xs w-full text-center shadow-2xl mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="labelSettingsTitle" class="text-lg font-black text-white flex items-center gap-2"><i class="fas fa-sliders text-purple-400"></i> Settings</h3>
+                <button id="closeSettingsBtn" type="button" class="text-slate-400 hover:text-white p-1"><i class="fas fa-times text-xl"></i></button>
+            </div>
+
+            <!-- Language Switcher -->
+            <div class="text-left mb-4">
+                <label id="labelLanguageSelect" class="text-xs uppercase font-bold text-slate-400 mb-2 block">Language / اللغة</label>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="lang-en" onclick="setLanguage('en')" type="button" class="theme-card rounded-xl p-2 text-xs font-bold text-white flex items-center justify-center gap-2">
+                        <i class="fas fa-globe text-cyan-400"></i> English
+                    </button>
+                    <button id="lang-ar" onclick="setLanguage('ar')" type="button" class="theme-card rounded-xl p-2 text-xs font-bold text-white flex items-center justify-center gap-2">
+                        <i class="fas fa-language text-purple-400"></i> العربية
+                    </button>
+                </div>
+            </div>
+
+            <!-- Theme Selection -->
+            <div class="text-left mb-4">
+                <label id="labelThemeSelect" class="text-xs uppercase font-bold text-slate-400 mb-2 block">Visual Theme</label>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="theme-neon" onclick="switchTheme('neon')" type="button" class="theme-card rounded-xl p-2.5 text-xs font-bold text-white flex items-center justify-center gap-2">
+                        <i class="fas fa-bolt text-cyan-400"></i> <span id="name-theme-neon">Neon</span>
+                    </button>
+                    <button id="theme-wood" onclick="switchTheme('wood')" type="button" class="theme-card rounded-xl p-2.5 text-xs font-bold text-white flex items-center justify-center gap-2">
+                        <i class="fas fa-tree text-amber-500"></i> <span id="name-theme-wood">Wood</span>
+                    </button>
+                    <button id="theme-gems" onclick="switchTheme('gems')" type="button" class="theme-card rounded-xl p-2.5 text-xs font-bold text-white flex items-center justify-center gap-2">
+                        <i class="fas fa-gem text-emerald-400"></i> <span id="name-theme-gems">Gems</span>
+                    </button>
+                    <button id="theme-dark" onclick="switchTheme('dark')" type="button" class="theme-card rounded-xl p-2.5 text-xs font-bold text-white flex items-center justify-center gap-2">
+                        <i class="fas fa-border-all text-slate-400"></i> <span id="name-theme-dark">Minimal</span>
+                    </button>
+                </div>
+            </div>
+
+            <button id="toggleAudioBtn" type="button" class="w-full btn-glass py-3 rounded-xl text-slate-200 text-xs font-bold mb-3 flex justify-between px-4">
+                <span id="labelSound">Sound Effects</span><span id="soundStatusText" class="text-emerald-400 font-black">ON</span>
+            </button>
+            <button id="doneSettingsBtn" type="button" class="btn-action w-full py-3 rounded-2xl text-white font-bold text-sm">Done</button>
+        </div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="gameOverModal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-xl flex items-center justify-center z-50 hidden">
+        <div class="bg-slate-900 border border-purple-500/30 rounded-3xl p-6 max-w-xs w-full text-center shadow-2xl mx-4 relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500"></div>
+            <h2 id="labelGameOverTitle" class="text-2xl font-black text-white mb-1">OUT OF MOVES!</h2>
+            <p id="labelGameOverDesc" class="text-slate-400 text-xs mb-4">No open space fits your remaining blocks.</p>
+            
+            <div class="bg-slate-950/70 rounded-2xl p-3 mb-5 space-y-2 border border-slate-800 text-sm">
+                <div class="flex justify-between items-center"><span id="labelFinalScore" class="text-slate-400">Score</span><span id="finalScore" class="font-black text-cyan-400 text-xl">0</span></div>
+                <div class="flex justify-between items-center"><span id="labelFinalBest" class="text-slate-400">Best Score</span><span id="finalBest" class="font-black text-pink-400 text-xl">0</span></div>
+            </div>
+
+            <div class="space-y-2.5">
+                <button id="rewardedBtn" type="button" class="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white py-3.5 rounded-2xl font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30">
+                    <i class="fas fa-video text-sm"></i> <span id="labelWatchAd">Watch Ad to Continue</span>
+                </button>
+                <button id="playAgainModalBtn" type="button" class="btn-action w-full py-3.5 rounded-2xl text-white font-extrabold text-xs flex items-center justify-center gap-2">
+                    <i class="fas fa-rotate-right text-sm"></i> <span id="labelRestartGame">Play Again</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+
+        const TRANSLATIONS = {
+            en: {
+                dir: 'ltr', mainTitle: 'BLOCK BURST', score: 'SCORE', bestScore: 'BEST SCORE', bannerAd: 'Banner Ad Space',
+                settingsTitle: 'Settings', languageSelect: 'Language', themeSelect: 'Visual Theme', sound: 'Sound Effects',
+                soundOn: 'ON', soundOff: 'OFF', done: 'Done', gameOverTitle: 'OUT OF MOVES!',
+                gameOverDesc: 'No open space fits your remaining blocks.', finalScore: 'Score', finalBest: 'Best Score',
+                watchAd: 'Watch Ad to Continue', restartGame: 'Play Again', confirmRestart: 'Restart game and start a new round?',
+                themeNames: { neon: 'Neon', wood: 'Wood', gems: 'Gems', dark: 'Minimal' },
+                themeSubtitles: { neon: 'NEON EDITION', wood: 'WOODEN EDITION', gems: 'EMERALD & CRYSTAL', dark: 'SIMPLE MONO' }
+            },
+            ar: {
+                dir: 'rtl', mainTitle: 'انفجار كتلة', score: 'نتيجة', bestScore: 'أفضل نتيجة', bannerAd: 'مساحة إعلانية (البنر)',
+                settingsTitle: 'الإعدادات', languageSelect: 'اللغة', themeSelect: 'المظهر البصري', sound: 'المؤثرات الصوتية',
+                soundOn: 'مفعل', soundOff: 'معطل', done: 'تم', gameOverTitle: 'انتهت المحاولات!',
+                gameOverDesc: 'لا توجد مساحة كافية للقطع المتبقية.', finalScore: 'النتيجة', finalBest: 'أفضل نتيجة',
+                watchAd: 'مشاهدة إعلان لاستكمال اللعب', restartGame: 'إعادة اللعب', confirmRestart: 'إعادة تشغيل مباراة جديدة؟',
+                themeNames: { neon: 'نيون', wood: 'خشب', gems: 'مجوهرات', dark: 'بسيط' },
+                themeSubtitles: { neon: 'إصدار نيون', wood: 'طبعة خشبية', gems: 'الزمرد والكريستال', dark: 'أحادي بسيط' }
+            }
+        };
+
+        let currentLang = localStorage.getItem('block_burst_lang') || 'en';
+
+        function setLanguage(lang) {
+            if (!TRANSLATIONS[lang]) return;
+            currentLang = lang; localStorage.setItem('block_burst_lang', lang);
+            const t = TRANSLATIONS[lang];
+            document.documentElement.lang = lang; document.documentElement.dir = t.dir;
+
+            document.getElementById('gameTitleText').innerText = t.mainTitle;
+            document.getElementById('labelScore').innerText = t.score;
+            document.getElementById('labelBestScore').innerText = t.bestScore;
+            document.getElementById('labelBannerAd').innerText = t.bannerAd;
+            document.getElementById('labelSettingsTitle').innerHTML = `<i class="fas fa-sliders text-purple-400"></i> ${t.settingsTitle}`;
+            document.getElementById('labelLanguageSelect').innerText = t.languageSelect;
+            document.getElementById('labelThemeSelect').innerText = t.themeSelect;
+            document.getElementById('labelSound').innerText = t.sound;
+            document.getElementById('doneSettingsBtn').innerText = t.done;
+            document.getElementById('labelGameOverTitle').innerText = t.gameOverTitle;
+            document.getElementById('labelGameOverDesc').innerText = t.gameOverDesc;
+            document.getElementById('labelFinalScore').innerText = t.finalScore;
+            document.getElementById('labelFinalBest').innerText = t.finalBest;
+            document.getElementById('labelWatchAd').innerText = t.watchAd;
+            document.getElementById('labelRestartGame').innerText = t.restartGame;
+            document.getElementById('soundStatusText').innerText = isAudioMuted ? t.soundOff : t.soundOn;
+
+            document.getElementById('name-theme-neon').innerText = t.themeNames.neon;
+            document.getElementById('name-theme-wood').innerText = t.themeNames.wood;
+            document.getElementById('name-theme-gems').innerText = t.themeNames.gems;
+            document.getElementById('name-theme-dark').innerText = t.themeNames.dark;
+
+            document.getElementById('lang-en').classList.toggle('active', lang === 'en');
+            document.getElementById('lang-ar').classList.toggle('active', lang === 'ar');
+
+            if (VISUAL_THEMES[currentThemeKey]) {
+                document.getElementById('themeSubtitle').innerText = t.themeSubtitles[currentThemeKey] || VISUAL_THEMES[currentThemeKey].subtitle;
+            }
+        }
+
+        const VISUAL_THEMES = {
+            neon: {
+                name: 'Neon', subtitle: 'NEON EDITION', bodyBg: '#090814',
+                boardBg: 'rgba(15, 18, 34, 0.9)', dockBg: 'rgba(12, 14, 28, 0.8)',
+                emptySlotBg: 'rgba(21, 25, 45, 0.75)', emptySlotBorder: 'rgba(255, 255, 255, 0.08)',
+                palettes: [
+                    { main: '#ec4899', light: '#f472b6', dark: '#be185d', glow: 'rgba(236, 72, 153, 0.7)' },
+                    { main: '#84cc16', light: '#a3e635', dark: '#4d7c0f', glow: 'rgba(132, 204, 22, 0.7)' },
+                    { main: '#8b5cf6', light: '#c084fc', dark: '#6d28d9', glow: 'rgba(139, 92, 246, 0.7)' },
+                    { main: '#f97316', light: '#fb923c', dark: '#c2410c', glow: 'rgba(249, 115, 22, 0.7)' },
+                    { main: '#06b6d4', light: '#67e8f9', dark: '#0e7490', glow: 'rgba(6, 182, 212, 0.7)' },
+                    { main: '#eab308', light: '#fef08a', dark: '#a16207', glow: 'rgba(234, 179, 8, 0.7)' }
+                ]
+            },
+            wood: {
+                name: 'Wood', subtitle: 'WOODEN EDITION', bodyBg: '#1f1008',
+                boardBg: 'rgba(38, 19, 10, 0.92)', dockBg: 'rgba(28, 14, 7, 0.85)',
+                emptySlotBg: 'rgba(20, 10, 5, 0.85)', emptySlotBorder: 'rgba(217, 119, 6, 0.18)',
+                palettes: [
+                    { main: '#b45309', light: '#f59e0b', dark: '#78350f', glow: 'rgba(180, 83, 9, 0.5)' },
+                    { main: '#f97316', light: '#fbbf24', dark: '#c2410c', glow: 'rgba(249, 115, 22, 0.5)' },
+                    { main: '#e11d48', light: '#fb7185', dark: '#9f1239', glow: 'rgba(225, 29, 72, 0.5)' },
+                    { main: '#16a34a', light: '#4ade80', dark: '#14532d', glow: 'rgba(22, 163, 74, 0.5)' }
+                ]
+            },
+            gems: {
+                name: 'Gems', subtitle: 'EMERALD & CRYSTAL', bodyBg: '#011910',
+                boardBg: 'rgba(4, 38, 26, 0.92)', dockBg: 'rgba(3, 26, 18, 0.85)',
+                emptySlotBg: 'rgba(2, 18, 12, 0.85)', emptySlotBorder: 'rgba(16, 185, 129, 0.18)',
+                palettes: [
+                    { main: '#10b981', light: '#6ee7b7', dark: '#047857', glow: 'rgba(16, 185, 129, 0.7)' },
+                    { main: '#06b6d4', light: '#67e8f9', dark: '#0e7490', glow: 'rgba(6, 182, 212, 0.7)' },
+                    { main: '#d946ef', light: '#f0abfc', dark: '#a21caf', glow: 'rgba(217, 70, 239, 0.7)' },
+                    { main: '#eab308', light: '#fef08a', dark: '#a16207', glow: 'rgba(234, 179, 8, 0.7)' },
+                    { main: '#f43f5e', light: '#fda4af', dark: '#be123c', glow: 'rgba(244, 63, 94, 0.7)' }
+                ]
+            },
+            dark: {
+                name: 'Minimal', subtitle: 'SIMPLE MONO', bodyBg: '#0a0f1d',
+                boardBg: 'rgba(18, 26, 44, 0.9)', dockBg: 'rgba(13, 18, 32, 0.85)',
+                emptySlotBg: 'rgba(10, 14, 25, 0.85)', emptySlotBorder: 'rgba(255, 255, 255, 0.05)',
+                palettes: [
+                    { main: '#38bdf8', light: '#7dd3fc', dark: '#0284c7', glow: 'rgba(56, 189, 248, 0.5)' },
+                    { main: '#2dd4bf', light: '#5eead4', dark: '#0f766e', glow: 'rgba(45, 212, 191, 0.5)' },
+                    { main: '#f43f5e', light: '#fb7185', dark: '#be123c', glow: 'rgba(244, 63, 94, 0.5)' },
+                    { main: '#64748b', light: '#94a3b8', dark: '#334155', glow: 'rgba(100, 116, 139, 0.5)' }
+                ]
+            }
+        };
+
+        const GRID_SIZE = 8;
+        const CELL_GAP = 5;
+
+        let board = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
+        let dockPieces = [null, null, null];
+        let selectedDockIndex = null;
+        let score = 0;
+        let bestScore = parseInt(localStorage.getItem('block_burst_neon_best') || '0', 10);
+        let isAudioMuted = false;
+        let currentThemeKey = localStorage.getItem('block_burst_theme') || 'neon';
+
+        let draggingIndex = null;
+        let draggedPieceData = null;
+        let hoverGridPos = null;
+        let cellSize = 0;
+        let boardPixelSize = 320;
+        let particles = [];
+
+        const PIECE_DEFINITIONS = [
+            { shape: [[1]] }, { shape: [[1,1],[1,1]] }, { shape: [[1,1,1],[1,1,1],[1,1,1]] },
+            { shape: [[1,1]] }, { shape: [[1,1,1]] }, { shape: [[1,1,1,1]] },
+            { shape: [[1],[1]] }, { shape: [[1],[1],[1]] }, { shape: [[1,0],[1,0],[1,1]] },
+            { shape: [[0,1],[0,1],[1,1]] }, { shape: [[1,1],[1,0]] }, { shape: [[1,1],[0,1]] }
+        ];
+
+        let audioCtx = null;
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playSound(type) {
+            if (isAudioMuted) return;
+            initAudio(); if (!audioCtx) return;
+            const t = audioCtx.currentTime;
+            if (type === 'select') {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'sine'; osc.frequency.setValueAtTime(320, t); osc.frequency.exponentialRampToValueAtTime(480, t + 0.05);
+                gain.gain.setValueAtTime(0.15, t); gain.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+                osc.connect(gain); gain.connect(audioCtx.destination); osc.start(t); osc.stop(t + 0.05);
+            } else if (type === 'place') {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(180, t); osc.frequency.exponentialRampToValueAtTime(360, t + 0.08);
+                gain.gain.setValueAtTime(0.25, t); gain.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
+                osc.connect(gain); gain.connect(audioCtx.destination); osc.start(t); osc.stop(t + 0.08);
+            } else if (type === 'clear') {
+                [261, 329, 392, 523, 659].forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(freq, t + idx * 0.04);
+                    gain.gain.setValueAtTime(0.15, t + idx * 0.04); gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.04 + 0.18);
+                    osc.connect(gain); gain.connect(audioCtx.destination); osc.start(t + idx * 0.04); osc.stop(t + idx * 0.04 + 0.18);
+                });
+            } else if (type === 'gameover') {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(280, t); osc.frequency.exponentialRampToValueAtTime(70, t + 0.4);
+                gain.gain.setValueAtTime(0.2, t); gain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+                osc.connect(gain); gain.connect(audioCtx.destination); osc.start(t); osc.stop(t + 0.4);
+            }
+        }
+
+        function toggleAudio() {
+            isAudioMuted = !isAudioMuted;
+            const t = TRANSLATIONS[currentLang];
+            document.getElementById('soundStatusText').innerText = isAudioMuted ? t.soundOff : t.soundOn;
+            document.getElementById('soundStatusText').className = isAudioMuted ? 'text-rose-400 font-black' : 'text-emerald-400 font-black';
+        }
+
+        function openSettingsModal() { document.getElementById('settingsModal').classList.remove('hidden'); }
+        function closeSettingsModal() { document.getElementById('settingsModal').classList.add('hidden'); }
+
+        let gridCanvas, gridCtx, fxCanvas, fxCtx, dragCanvas, dragCtx, scoreText, bestScoreText, boardWrapper;
+
+        window.onload = function() {
+            gridCanvas = document.getElementById('gridCanvas'); gridCtx = gridCanvas.getContext('2d');
+            fxCanvas = document.getElementById('fxCanvas'); fxCtx = fxCanvas.getContext('2d');
+            dragCanvas = document.getElementById('draggedPieceCanvas'); dragCtx = dragCanvas.getContext('2d');
+            scoreText = document.getElementById('scoreText'); bestScoreText = document.getElementById('bestScoreText');
+            boardWrapper = document.getElementById('boardWrapper');
+
+            document.getElementById('settingsBtn').onclick = openSettingsModal;
+            document.getElementById('closeSettingsBtn').onclick = closeSettingsModal;
+            document.getElementById('doneSettingsBtn').onclick = closeSettingsModal;
+            document.getElementById('restartHeaderBtn').onclick = () => { if (confirm(TRANSLATIONS[currentLang].confirmRestart)) resetGame(); };
+            document.getElementById('toggleAudioBtn').onclick = toggleAudio;
+            document.getElementById('rewardedBtn').onclick = handleContinueAfterAd;
+            document.getElementById('playAgainModalBtn').onclick = handleRestartAfterAd;
+
+            setupCanvasDimensions(); setLanguage(currentLang); switchTheme(currentThemeKey);
+            updateScoreUI(); spawnDockPieces(); drawBoard(); registerEvents();
+            requestAnimationFrame(particleLoop);
+        };
+
+        window.onresize = () => { setupCanvasDimensions(); drawBoard(); renderDock(); };
+
+        function setupCanvasDimensions() {
+            const rect = boardWrapper.getBoundingClientRect();
+            boardPixelSize = Math.floor(rect.width > 0 ? rect.width : 320);
+            cellSize = (boardPixelSize - (CELL_GAP * (GRID_SIZE + 1))) / GRID_SIZE;
+            
+            gridCanvas.width = boardPixelSize; gridCanvas.height = boardPixelSize;
+            fxCanvas.width = boardPixelSize; fxCanvas.height = boardPixelSize;
+        }
+
+        function updateScoreUI() { scoreText.innerText = score; bestScoreText.innerText = bestScore; }
+
+        function generateRandomPiece() {
+            const def = PIECE_DEFINITIONS[Math.floor(Math.random() * PIECE_DEFINITIONS.length)];
+            const themePalettes = VISUAL_THEMES[currentThemeKey].palettes;
+            const paletteIdx = Math.floor(Math.random() * themePalettes.length);
+            return { shape: def.shape, paletteIdx: paletteIdx };
+        }
+
+        function spawnDockPieces() {
+            for (let i = 0; i < 3; i++) {
+                if (dockPieces[i] === null) dockPieces[i] = generateRandomPiece();
+            }
+            renderDock(); checkGameOver();
+        }
+
+        function drawRoundedRect(ctx, x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
+        }
+
+        function drawRealistic3DBlock(ctx, x, y, size, paletteIdx, opacity = 1.0) {
+            const activeTheme = VISUAL_THEMES[currentThemeKey] || VISUAL_THEMES.neon;
+            const palettes = activeTheme.palettes;
+            const palette = palettes[paletteIdx % palettes.length];
+            const radius = Math.floor(size * 0.28);
+
+            ctx.save(); ctx.globalAlpha = opacity;
+            ctx.shadowColor = palette.glow; ctx.shadowBlur = 6; ctx.shadowOffsetY = 2;
+
+            drawRoundedRect(ctx, x, y, size, size, radius);
+            const baseGrad = ctx.createLinearGradient(x, y, x, y + size);
+            baseGrad.addColorStop(0, palette.light);
+            baseGrad.addColorStop(0.48, palette.main);
+            baseGrad.addColorStop(1, palette.dark);
+            ctx.fillStyle = baseGrad; ctx.fill();
+
+            ctx.shadowColor = 'transparent';
+            ctx.save();
+            drawRoundedRect(ctx, x, y, size, size, radius); ctx.clip();
+
+            ctx.beginPath();
+            ctx.ellipse(x + size * 0.5, y + size * 0.22, size * 0.38, size * 0.16, 0, 0, Math.PI * 2);
+            const glossGrad = ctx.createLinearGradient(x, y, x, y + size * 0.38);
+            glossGrad.addColorStop(0, 'rgba(255, 255, 255, 0.75)');
+            glossGrad.addColorStop(1, 'rgba(255, 255, 255, 0.08)');
+            ctx.fillStyle = glossGrad; ctx.fill();
+
+            ctx.beginPath();
+            drawRoundedRect(ctx, x + 1, y + size - 4, size - 2, 3, 2);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.25)'; ctx.fill();
+
+            ctx.restore(); ctx.restore();
+        }
+
+        function drawBoard() {
+            if (!gridCtx) return;
+            gridCtx.clearRect(0, 0, boardPixelSize, boardPixelSize);
+            const theme = VISUAL_THEMES[currentThemeKey];
+
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const x = CELL_GAP + c * (cellSize + CELL_GAP);
+                    const y = CELL_GAP + r * (cellSize + CELL_GAP);
+                    const radius = Math.floor(cellSize * 0.28);
+                    drawRoundedRect(gridCtx, x, y, cellSize, cellSize, radius);
+                    gridCtx.fillStyle = theme.emptySlotBg; gridCtx.fill();
+                    gridCtx.strokeStyle = theme.emptySlotBorder; gridCtx.lineWidth = 1; gridCtx.stroke();
+                }
+            }
+
+            const activePiece = draggedPieceData || (selectedDockIndex !== null ? dockPieces[selectedDockIndex] : null);
+            if (hoverGridPos && activePiece) {
+                const isValid = canPlacePiece(activePiece.shape, hoverGridPos.row, hoverGridPos.col);
+                const shape = activePiece.shape;
+                for (let r = 0; r < shape.length; r++) {
+                    for (let c = 0; c < shape[r].length; c++) {
+                        if (shape[r][c] === 1) {
+                            const tr = hoverGridPos.row + r, tc = hoverGridPos.col + c;
+                            if (tr >= 0 && tr < GRID_SIZE && tc >= 0 && tc < GRID_SIZE) {
+                                const x = CELL_GAP + tc * (cellSize + CELL_GAP);
+                                const y = CELL_GAP + tr * (cellSize + CELL_GAP);
+                                drawRealistic3DBlock(gridCtx, x, y, cellSize, activePiece.paletteIdx, isValid ? 0.65 : 0.3);
+                            }
+                        }
+                    }
+                }
+            }
+
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (board[r][c] !== null) {
+                        const x = CELL_GAP + c * (cellSize + CELL_GAP);
+                        const y = CELL_GAP + r * (cellSize + CELL_GAP);
+                        drawRealistic3DBlock(gridCtx, x, y, cellSize, board[r][c]);
+                    }
+                }
+            }
+        }
+
+        function renderDock() {
+            for (let i = 0; i < 3; i++) {
+                const slot = document.getElementById(`dock-${i}`);
+                if (!slot) continue;
+                slot.innerHTML = ''; slot.classList.toggle('selected', selectedDockIndex === i);
+                const piece = dockPieces[i];
+                if (piece) {
+                    const canvas = document.createElement('canvas');
+                    const rows = piece.shape.length, cols = piece.shape[0].length;
+                    const mini = 18, gap = 3;
+                    canvas.width = cols * (mini + gap); canvas.height = rows * (mini + gap);
+                    const ctx = canvas.getContext('2d');
+                    for (let r = 0; r < rows; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            if (piece.shape[r][c] === 1) {
+                                drawRealistic3DBlock(ctx, c * (mini + gap), r * (mini + gap), mini, piece.paletteIdx);
+                            }
+                        }
+                    }
+                    slot.appendChild(canvas);
+                }
+            }
+        }
+
+        function switchTheme(key) {
+            if (!VISUAL_THEMES[key]) return;
+            currentThemeKey = key; localStorage.setItem('block_burst_theme', key);
+            const theme = VISUAL_THEMES[key]; const t = TRANSLATIONS[currentLang];
+
+            document.body.style.background = theme.bodyBg;
+            document.getElementById('boardWrapper').style.background = theme.boardBg;
+            document.getElementById('dockContainer').style.background = theme.dockBg;
+            document.getElementById('themeSubtitle').innerText = t.themeSubtitles[key] || theme.subtitle;
+            
+            Object.keys(VISUAL_THEMES).forEach(k => {
+                const card = document.getElementById(`theme-${k}`);
+                if (card) card.classList.toggle('active', k === key);
+            });
+
+            drawBoard(); renderDock();
+        }
+
+        function registerEvents() {
+            for (let i = 0; i < 3; i++) {
+                const slot = document.getElementById(`dock-${i}`);
+                slot.addEventListener('mousedown', e => startDrag(e, i, e.clientX, e.clientY));
+                slot.addEventListener('touchstart', e => { if (e.touches.length) startDrag(e, i, e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
+                slot.addEventListener('click', () => {
+                    if (draggingIndex === null && dockPieces[i]) {
+                        selectedDockIndex = selectedDockIndex === i ? null : i;
+                        playSound('select'); renderDock(); drawBoard();
+                    }
+                });
+            }
+
+            window.addEventListener('mousemove', onDragMove);
+            window.addEventListener('touchmove', e => { if (draggingIndex !== null && e.touches.length) { onDragMove(e.touches[0]); e.preventDefault(); } }, { passive: false });
+            window.addEventListener('mouseup', endDrag); window.addEventListener('touchend', endDrag);
+
+            gridCanvas.addEventListener('click', e => {
+                if (selectedDockIndex !== null && dockPieces[selectedDockIndex]) {
+                    const rect = gridCanvas.getBoundingClientRect();
+                    const col = Math.floor((e.clientX - rect.left) / (cellSize + CELL_GAP));
+                    const row = Math.floor((e.clientY - rect.top) / (cellSize + CELL_GAP));
+                    const piece = dockPieces[selectedDockIndex];
+                    if (canPlacePiece(piece.shape, row, col)) {
+                        placePiece(piece, row, col);
+                        dockPieces[selectedDockIndex] = null; selectedDockIndex = null;
+                        playSound('place'); checkAndClearLines();
+                        if (dockPieces.every(p => p === null)) spawnDockPieces();
+                        else { renderDock(); checkGameOver(); }
+                        drawBoard();
+                    }
+                }
+            });
+        }
+
+        function startDrag(e, index, cx, cy) {
+            initAudio(); if (!dockPieces[index]) return; e.preventDefault();
+            draggingIndex = index; selectedDockIndex = null;
+            draggedPieceData = dockPieces[index]; playSound('select');
+
+            const shape = draggedPieceData.shape;
+            dragCanvas.width = shape[0].length * (cellSize + CELL_GAP);
+            dragCanvas.height = shape.length * (cellSize + CELL_GAP);
+            dragCtx.clearRect(0, 0, dragCanvas.width, dragCanvas.height);
+            for (let r = 0; r < shape.length; r++) {
+                for (let c = 0; c < shape[r].length; c++) {
+                    if (shape[r][c] === 1) drawRealistic3DBlock(dragCtx, c * (cellSize + CELL_GAP), r * (cellSize + CELL_GAP), cellSize, draggedPieceData.paletteIdx);
+                }
+            }
+            dragCanvas.style.display = 'block'; updateDragPosition(cx, cy);
+        }
+
+        function updateDragPosition(cx, cy) {
+            if (draggingIndex === null) return;
+            dragCanvas.style.left = `${cx}px`; dragCanvas.style.top = `${cy - 65}px`;
+            const rect = gridCanvas.getBoundingClientRect();
+            const gx = cx - rect.left - (dragCanvas.width / 2);
+            const gy = (cy - 65) - rect.top - (dragCanvas.height / 2);
+            hoverGridPos = { row: Math.round(gy / (cellSize + CELL_GAP)), col: Math.round(gx / (cellSize + CELL_GAP)) };
+            drawBoard();
+        }
+
+        function onDragMove(e) { if (draggingIndex !== null) updateDragPosition(e.clientX, e.clientY); }
+
+        function endDrag() {
+            if (draggingIndex === null) return;
+            let placed = false;
+            if (hoverGridPos && draggedPieceData && canPlacePiece(draggedPieceData.shape, hoverGridPos.row, hoverGridPos.col)) {
+                placePiece(draggedPieceData, hoverGridPos.row, hoverGridPos.col);
+                dockPieces[draggingIndex] = null; placed = true;
+            }
+            draggingIndex = null; draggedPieceData = null; hoverGridPos = null;
+            dragCanvas.style.display = 'none'; drawBoard();
+            if (placed) {
+                playSound('place'); checkAndClearLines();
+                if (dockPieces.every(p => p === null)) spawnDockPieces();
+                else { renderDock(); checkGameOver(); }
+            } else { renderDock(); }
+        }
+
+        function canPlacePiece(shape, sr, sc) {
+            for (let r = 0; r < shape.length; r++) {
+                for (let c = 0; c < shape[r].length; c++) {
+                    if (shape[r][c] === 1) {
+                        const tr = sr + r, tc = sc + c;
+                        if (tr < 0 || tr >= GRID_SIZE || tc < 0 || tc >= GRID_SIZE || board[tr][tc] !== null) return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function placePiece(piece, sr, sc) {
+            let count = 0;
+            for (let r = 0; r < piece.shape.length; r++) {
+                for (let c = 0; c < piece.shape[r].length; c++) {
+                    if (piece.shape[r][c] === 1) { board[sr + r][sc + c] = piece.paletteIdx; count++; }
+                }
+            }
+            score += count * 10; updateScoreUI();
+        }
+
+        function checkAndClearLines() {
+            let rows = [], cols = [];
+            for (let r = 0; r < GRID_SIZE; r++) if (board[r].every(cell => cell !== null)) rows.push(r);
+            for (let c = 0; c < GRID_SIZE; c++) {
+                if (board.every(row => row[c] !== null)) cols.push(c);
+            }
+            if (rows.length || cols.length) {
+                playSound('clear');
+                rows.forEach(r => { for (let c = 0; c < GRID_SIZE; c++) { spawnParticles(r, c, board[r][c]); board[r][c] = null; } });
+                cols.forEach(c => { for (let r = 0; r < GRID_SIZE; r++) { spawnParticles(r, c, board[r][c]); board[r][c] = null; } });
+                score += (rows.length + cols.length) * 100;
+                if (score > bestScore) { bestScore = score; localStorage.setItem('block_burst_neon_best', bestScore); }
+                updateScoreUI(); drawBoard();
+            }
+        }
+
+        function checkGameOver() {
+            let valid = false;
+            for (let i = 0; i < 3; i++) {
+                const p = dockPieces[i];
+                if (p) {
+                    for (let r = 0; r < GRID_SIZE; r++) {
+                        for (let c = 0; c < GRID_SIZE; c++) {
+                            if (canPlacePiece(p.shape, r, c)) { valid = true; break; }
+                        }
+                        if (valid) break;
+                    }
+                }
+                if (valid) break;
+            }
+            if (!valid && dockPieces.some(p => p !== null)) {
+                setTimeout(() => {
+                    playSound('gameover');
+                    document.getElementById('finalScore').innerText = score;
+                    document.getElementById('finalBest').innerText = bestScore;
+                    document.getElementById('gameOverModal').classList.remove('hidden');
+                }, 300);
+            }
+        }
+
+        function handleContinueAfterAd() {
+            document.getElementById('gameOverModal').classList.add('hidden');
+            for (let r = 2; r < 6; r++) { for (let c = 2; c < 6; c++) { board[r][c] = null; } }
+            dockPieces = [generateRandomPiece(), generateRandomPiece(), generateRandomPiece()];
+            renderDock(); drawBoard();
+        }
+
+        function handleRestartAfterAd() { resetGame(); }
+
+        function spawnParticles(r, c, paletteIdx) {
+            const activeTheme = VISUAL_THEMES[currentThemeKey] || VISUAL_THEMES.neon;
+            const palette = activeTheme.palettes[paletteIdx % activeTheme.palettes.length] || activeTheme.palettes[0];
+            const cx = CELL_GAP + c * (cellSize + CELL_GAP) + cellSize / 2;
+            const cy = CELL_GAP + r * (cellSize + CELL_GAP) + cellSize / 2;
+            for (let i = 0; i < 8; i++) {
+                const angle = Math.random() * Math.PI * 2; const speed = Math.random() * 5 + 2;
+                particles.push({ x: cx, y: cy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, size: Math.random() * 6 + 2, color: palette.light, life: 1.0 });
+            }
+        }
+
+        function particleLoop() {
+            if (!fxCtx) return;
+            fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx; p.y += p.vy; p.life -= 0.04;
+                if (p.life <= 0) { particles.splice(i, 1); continue; }
+                fxCtx.save(); fxCtx.globalAlpha = p.life; fxCtx.fillStyle = p.color;
+                fxCtx.beginPath(); fxCtx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2); fxCtx.fill();
+                fxCtx.restore();
+            }
+            requestAnimationFrame(particleLoop);
+        }
+
+        function resetGame() {
+            board = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
+            dockPieces = [null, null, null]; selectedDockIndex = null; score = 0;
+            updateScoreUI(); document.getElementById('gameOverModal').classList.add('hidden');
+            closeSettingsModal(); spawnDockPieces(); drawBoard();
+        }
+    </script>
+</body>
+</html>
